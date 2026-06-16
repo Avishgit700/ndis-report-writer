@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #10b98155; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #10b98199; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(1.04); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ping-slow {
+  0%        { transform: scale(1);   opacity: 1; }
+  75%, 100% { transform: scale(1.8); opacity: 0; }
+}
+
+.animate-float      { animation: float 6s ease-in-out infinite; }
+.animate-glow-pulse { animation: glow-pulse 4s ease-in-out infinite; }
+.animate-fade-up    { animation: fade-up 0.5s ease-out forwards; }
+.animate-ping-slow  { animation: ping-slow 2s cubic-bezier(0,0,0.2,1) infinite; }
+
+/* Shimmer text — teal/emerald theme */
+.text-shimmer {
+  background: linear-gradient(90deg, #0d9488 0%, #10b981 35%, #0d9488 70%, #059669 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 4s linear infinite;
+}
+
+/* AI glow badge */
+.ai-badge {
+  background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(13,148,136,0.08));
+  border: 1px solid rgba(16,185,129,0.3);
+  backdrop-filter: blur(8px);
+}
+
+/* Card hover lift */
+.card-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(16,185,129,0.12), 0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* Gradient border card */
+.gradient-border {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 17px;
+  background: linear-gradient(135deg, rgba(16,185,129,0.3), rgba(13,148,136,0.2), rgba(16,185,129,0.1));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.gradient-border:hover::before { opacity: 1; }
