@@ -1,23 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { getToken, getUser } from '@/lib/engine'
-import { Copy, Check, Sparkles, AlertCircle, ArrowRight, X, CheckCircle2, FileText } from 'lucide-react'
+import { Copy, Check, Sparkles, AlertCircle, ArrowRight, X, CheckCircle2, FileText, ChevronDown, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 
 const FREE_LIMIT = 5
 
-const REPORT_TYPES = [
-  { value: 'Progress Note',                label: 'Progress Note' },
-  { value: 'Incident Report',              label: 'Incident Report' },
-  { value: 'Handover Note',                label: 'Handover Note' },
-  { value: 'Support Plan',                 label: 'Support Plan' },
-  { value: 'Goal Review Note',             label: 'Goal Review Note' },
-  { value: 'Functional Capacity Assessment', label: 'Functional Capacity Assessment' },
+const DEFAULT_REPORT_TYPES = [
+  'Progress Note',
+  'Incident Report',
+  'Handover Note',
+  'Support Plan',
+  'Goal Review Note',
+  'Functional Capacity Assessment',
 ]
 
-const MOOD_OPTIONS = [
+const DEFAULT_MOOD_OPTIONS = [
   'Happy and engaged',
   'Calm and cooperative',
   'Anxious or unsettled',
@@ -26,12 +26,107 @@ const MOOD_OPTIONS = [
   'Neutral / no concerns',
 ]
 
+// Combobox: shows dropdown options + lets user type or add custom value
+function ComboSelect({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder = 'Select or type…',
+  allowCustom = true,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: string[]
+  placeholder?: string
+  allowCustom?: boolean
+}) {
+  const [open, setOpen]       = useState(false)
+  const [input, setInput]     = useState(value)
+  const [opts, setOpts]       = useState(options)
+  const ref                   = useRef<HTMLDivElement>(null)
+
+  // sync input when value changes externally
+  useEffect(() => { setInput(value) }, [value])
+
+  // close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = opts.filter(o => o.toLowerCase().includes(input.toLowerCase()))
+  const showAdd  = allowCustom && input.trim() && !opts.some(o => o.toLowerCase() === input.toLowerCase().trim())
+
+  function select(v: string) {
+    setInput(v)
+    onChange(v)
+    setOpen(false)
+  }
+
+  function addCustom() {
+    const v = input.trim()
+    if (!v) return
+    setOpts(prev => [...prev, v])
+    select(v)
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          value={input}
+          onChange={e => { setInput(e.target.value); onChange(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          className="w-full px-3 py-2.5 pr-9 border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50 focus:bg-white transition-colors"
+        />
+        <button type="button" onClick={() => setOpen(o => !o)} tabIndex={-1}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+          <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+      {open && (filtered.length > 0 || showAdd) && (
+        <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          <ul className="max-h-52 overflow-y-auto">
+            {filtered.map(o => (
+              <li key={o}>
+                <button type="button" onClick={() => select(o)}
+                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-emerald-50 hover:text-emerald-700 transition-colors ${value === o ? 'bg-emerald-50 text-emerald-700 font-medium' : 'text-gray-700'}`}>
+                  {o}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {showAdd && (
+            <button type="button" onClick={addCustom}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-emerald-600 font-medium border-t border-gray-100 hover:bg-emerald-50 transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Add &ldquo;{input.trim()}&rdquo;
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const TIPS = [
   'Type rough notes in plain English — the AI handles the professional language.',
   'Save your client profiles to make future notes even faster.',
   'Include NDIS goal keywords like "independence", "communication", or "community access" for richer notes.',
   'Incident reports should mention immediate response and follow-up actions in your raw notes.',
 ]
+
+interface ClientProfile {
+  id: string
+  data: { name?: string; goals?: string; ndisNumber?: string; supports?: string }
+}
 
 export default function DashboardPage() {
   const searchParams = useSearchParams()
@@ -53,6 +148,8 @@ export default function DashboardPage() {
   const [plan, setPlan]               = useState<string>('free')
   const [showToast, setShowToast]     = useState(false)
   const [tipIndex]                    = useState(() => Math.floor(Math.random() * TIPS.length))
+  const [clients, setClients]         = useState<ClientProfile[]>([])
+  const [selectedClient, setSelectedClient] = useState('')
 
   const ENGINE_URL = process.env.NEXT_PUBLIC_ENGINE_URL ?? 'https://saas-engine-production.up.railway.app'
   const isPro          = plan === 'pro'
@@ -85,11 +182,27 @@ export default function DashboardPage() {
         .then(json => { if (json.data?.plan) setPlan(json.data.plan) })
         .catch(() => {})
     }
+    // load saved client profiles for quick-fill
+    fetch(`${ENGINE_URL}/api/orgs/${process.env.NEXT_PUBLIC_ORG_ID}/projects/${process.env.NEXT_PUBLIC_PROJECT_ID}/records?entityType=client_profile&limit=100`, {
+      headers: { 'X-API-Key': process.env.NEXT_PUBLIC_API_KEY ?? '' },
+    })
+      .then(r => r.json())
+      .then(d => setClients(d.data?.data ?? []))
+      .catch(() => {})
     if (searchParams.get('upgraded') === 'true') {
       setShowToast(true)
       setTimeout(() => setShowToast(false), 6000)
     }
   }, [searchParams, ENGINE_URL])
+
+  function loadClient(id: string) {
+    setSelectedClient(id)
+    if (!id) return
+    const c = clients.find(c => c.id === id)
+    if (!c) return
+    if (c.data.name)   setClientName(c.data.name)
+    if (c.data.goals)  setClientGoals(c.data.goals)
+  }
 
   async function handleGenerate() {
     if (!rawNotes.trim() || isLimitReached) return
@@ -181,13 +294,27 @@ export default function DashboardPage() {
           <h2 className="font-semibold text-gray-900">Shift Details</h2>
 
           {/* Report type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Report type <span className="text-red-400">*</span></label>
-            <select value={reportType} onChange={e => setReportType(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50">
-              {REPORT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
+          <ComboSelect
+            label="Report type *"
+            value={reportType}
+            onChange={setReportType}
+            options={DEFAULT_REPORT_TYPES}
+            placeholder="Select or type a report type…"
+          />
+
+          {/* Quick-load saved client */}
+          {clients.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Load saved participant</label>
+              <select value={selectedClient} onChange={e => loadClient(e.target.value)}
+                className="w-full px-3 py-2.5 border border-emerald-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-emerald-50 focus:bg-white transition-colors">
+                <option value="">— select to auto-fill —</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.data.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Client + Worker */}
           <div className="grid grid-cols-2 gap-3">
@@ -221,14 +348,13 @@ export default function DashboardPage() {
           </div>
 
           {/* Mood */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Participant mood/presentation</label>
-            <select value={mood} onChange={e => setMood(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50">
-              <option value="">Select mood…</option>
-              {MOOD_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
+          <ComboSelect
+            label="Participant mood/presentation"
+            value={mood}
+            onChange={setMood}
+            options={DEFAULT_MOOD_OPTIONS}
+            placeholder="Select or describe mood…"
+          />
 
           {/* NDIS Goals */}
           <div>

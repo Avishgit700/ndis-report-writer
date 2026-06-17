@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { Ollama } from '@langchain/ollama'
 import { NextRequest, NextResponse } from 'next/server'
 
 const ENGINE_URL = process.env.NEXT_PUBLIC_ENGINE_URL ?? 'https://saas-engine-production.up.railway.app'
@@ -6,6 +7,11 @@ const ORG_ID     = process.env.SAAS_ENGINE_ORG_ID!
 const PROJECT_ID = process.env.SAAS_ENGINE_PROJECT_ID!
 const API_KEY    = process.env.SAAS_ENGINE_API_KEY!
 const FREE_LIMIT = 5
+
+// Set USE_LOCAL_LLM=true in .env.local to use Ollama instead of Claude
+const USE_LOCAL_LLM  = process.env.USE_LOCAL_LLM === 'true'
+const OLLAMA_MODEL   = process.env.OLLAMA_MODEL ?? 'llama3'
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
 
 const SYSTEM_PROMPT = `You are an expert NDIS documentation assistant. You write professional, compliant, and person-centred NDIS support documentation for Australian disability support workers.
 
@@ -26,6 +32,31 @@ For Handover Notes: shift summary → key observations → pending tasks → fol
 
 Output ONLY the note text — no preamble, no labels like "Here is your note:", no quotes.`
 
+async function generateWithOllama(userPrompt: string): Promise<string> {
+  const llm = new Ollama({
+    model: OLLAMA_MODEL,
+    baseUrl: OLLAMA_BASE_URL,
+    temperature: 0.3,
+  })
+  const fullPrompt = `${SYSTEM_PROMPT}\n\n${userPrompt}`
+  const result = await llm.invoke(fullPrompt)
+  return result.trim()
+}
+
+async function generateWithClaude(userPrompt: string): Promise<string> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+  const message = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 800,
+    system: SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: userPrompt }],
+  })
+  return message.content
+    .filter(block => block.type === 'text')
+    .map(block => (block as { type: 'text'; text: string }).text)
+    .join('')
+}
+
 async function getEngineUser(token: string) {
   const res = await fetch(`${ENGINE_URL}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -33,6 +64,23 @@ async function getEngineUser(token: string) {
   if (!res.ok) return null
   const json = await res.json()
   return json.data as { id: string; email: string; name: string } | null
+}
+
+async function getUserPlan(userId: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `${ENGINE_URL}/api/orgs/${ORG_ID}/projects/${PROJECT_ID}/records?entityType=subscription&limit=100`,
+      { headers: { 'X-API-Key': API_KEY } }
+    )
+    if (!res.ok) return 'free'
+    const json = await res.json()
+    const records: Array<{ data?: { userId?: string; plan?: string; status?: string } }> =
+      json.data?.data ?? []
+    const active = records.find(r => r.data?.userId === userId && r.data?.status === 'active')
+    return active?.data?.plan ?? 'free'
+  } catch {
+    return 'free'
+  }
 }
 
 async function getUsageCount(userId: string): Promise<number> {
@@ -57,7 +105,7 @@ export async function POST(request: NextRequest) {
   const user = await getEngineUser(token)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const plan: string = 'free'
+  const plan: string = await getUserPlan(user.id)
   const isPro = plan === 'pro'
 
   if (!isPro) {
@@ -71,18 +119,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const {
-    reportType,
-    clientName,
-    workerName,
-    date,
-    duration,
-    clientGoals,
-    rawNotes,
-    mood,
-    activities,
-    incidents,
-  } = body
+  const { reportType, clientName, workerName, date, duration, clientGoals, rawNotes, mood, activities, incidents } = body
 
   if (!rawNotes?.trim()) {
     return NextResponse.json({ error: 'Notes are required' }, { status: 400 })
@@ -105,18 +142,17 @@ Worker's raw notes:
 Write the ${reportType || 'progress note'} now.`
 
   try {
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 800,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }],
-    })
+    let noteText: string
 
-    const noteText = message.content
-      .filter(block => block.type === 'text')
-      .map(block => (block as { type: 'text'; text: string }).text)
-      .join('')
+    if (USE_LOCAL_LLM) {
+      // Use Ollama (local, free, private)
+      console.log(`[LLM] Using Ollama — model: ${OLLAMA_MODEL}`)
+      noteText = await generateWithOllama(userPrompt)
+    } else {
+      // Use Claude API (cloud)
+      console.log('[LLM] Using Claude API')
+      noteText = await generateWithClaude(userPrompt)
+    }
 
     if (!noteText) {
       return NextResponse.json({ error: 'Failed to generate note' }, { status: 500 })
@@ -129,7 +165,7 @@ Write the ${reportType || 'progress note'} now.`
         headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({
           entityType: 'ndis_note',
-          data: { userId: user.id, clientName, reportType, generatedNote: noteText, rawInput: rawNotes, workerName, duration, date },
+          data: { userId: user.id, clientName, reportType, generatedNote: noteText, rawInput: rawNotes, workerName, duration, date, llm: USE_LOCAL_LLM ? OLLAMA_MODEL : 'claude-haiku' },
         }),
       }),
       fetch(`${ENGINE_URL}/api/orgs/${ORG_ID}/projects/${PROJECT_ID}/records`, {
@@ -142,7 +178,7 @@ Write the ${reportType || 'progress note'} now.`
       }),
     ]).catch(console.error)
 
-    return NextResponse.json({ note: noteText })
+    return NextResponse.json({ note: noteText, llm: USE_LOCAL_LLM ? OLLAMA_MODEL : 'claude-haiku' })
   } catch (error) {
     console.error('AI generation error:', error)
     return NextResponse.json({ error: 'AI generation failed. Please try again.' }, { status: 500 })
