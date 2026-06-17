@@ -1,16 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { Ollama } from '@langchain/ollama'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
 
-const ENGINE_URL = process.env.NEXT_PUBLIC_ENGINE_URL ?? 'https://saas-engine-production.up.railway.app'
-const ORG_ID     = process.env.SAAS_ENGINE_ORG_ID!
-const PROJECT_ID = process.env.SAAS_ENGINE_PROJECT_ID!
-const API_KEY    = process.env.SAAS_ENGINE_API_KEY!
-const FREE_LIMIT = 5
+export const maxDuration = 120
 
-// Set USE_LOCAL_LLM=true in .env.local to use Ollama instead of Claude
-const USE_LOCAL_LLM  = process.env.USE_LOCAL_LLM === 'true'
-const OLLAMA_MODEL   = process.env.OLLAMA_MODEL ?? 'llama3'
+const ENGINE_URL  = process.env.NEXT_PUBLIC_ENGINE_URL ?? 'https://saas-engine-production.up.railway.app'
+const ORG_ID      = process.env.SAAS_ENGINE_ORG_ID!
+const PROJECT_ID  = process.env.SAAS_ENGINE_PROJECT_ID!
+const API_KEY     = process.env.SAAS_ENGINE_API_KEY!
+const FREE_LIMIT  = 5
+
+const USE_GEMINI      = process.env.USE_GEMINI === 'true'
+const USE_LOCAL_LLM   = process.env.USE_LOCAL_LLM === 'true'
+const OLLAMA_MODEL    = process.env.OLLAMA_MODEL ?? 'llama3'
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
 
 const SYSTEM_PROMPT = `You are an expert NDIS documentation assistant. You write professional, compliant, and person-centred NDIS support documentation for Australian disability support workers.
@@ -33,14 +35,44 @@ For Handover Notes: shift summary → key observations → pending tasks → fol
 Output ONLY the note text — no preamble, no labels like "Here is your note:", no quotes.`
 
 async function generateWithOllama(userPrompt: string): Promise<string> {
-  const llm = new Ollama({
-    model: OLLAMA_MODEL,
-    baseUrl: OLLAMA_BASE_URL,
-    temperature: 0.3,
+  const res = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model:  OLLAMA_MODEL,
+      prompt: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
+      stream: true,
+      options: { temperature: 0.3, num_predict: 600 },
+    }),
   })
-  const fullPrompt = `${SYSTEM_PROMPT}\n\n${userPrompt}`
-  const result = await llm.invoke(fullPrompt)
-  return result.trim()
+  if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`)
+
+  // Read the NDJSON stream and collect all tokens
+  const reader  = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let output    = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    const chunk = decoder.decode(value, { stream: true })
+    for (const line of chunk.split('\n')) {
+      if (!line.trim()) continue
+      try {
+        const json = JSON.parse(line) as { response?: string; done?: boolean }
+        if (json.response) output += json.response
+        if (json.done) break
+      } catch { /* skip malformed lines */ }
+    }
+  }
+  return output.trim()
+}
+
+async function generateWithGemini(userPrompt: string): Promise<string> {
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const result = await model.generateContent(`${SYSTEM_PROMPT}\n\n${userPrompt}`)
+  return result.response.text().trim()
 }
 
 async function generateWithClaude(userPrompt: string): Promise<string> {
@@ -143,15 +175,26 @@ Write the ${reportType || 'progress note'} now.`
 
   try {
     let noteText: string
+    let llmUsed: string
 
-    if (USE_LOCAL_LLM) {
-      // Use Ollama (local, free, private)
+    if (USE_GEMINI) {
+      console.log('[LLM] Using Gemini 2.0 Flash')
+      try {
+        noteText = await generateWithGemini(userPrompt)
+        llmUsed  = 'gemini-2.0-flash'
+      } catch (e) {
+        console.warn('[LLM] Gemini failed, falling back to Ollama:', e)
+        noteText = await generateWithOllama(userPrompt)
+        llmUsed  = OLLAMA_MODEL
+      }
+    } else if (USE_LOCAL_LLM) {
       console.log(`[LLM] Using Ollama — model: ${OLLAMA_MODEL}`)
       noteText = await generateWithOllama(userPrompt)
+      llmUsed  = OLLAMA_MODEL
     } else {
-      // Use Claude API (cloud)
       console.log('[LLM] Using Claude API')
       noteText = await generateWithClaude(userPrompt)
+      llmUsed  = 'claude-haiku'
     }
 
     if (!noteText) {
@@ -165,7 +208,7 @@ Write the ${reportType || 'progress note'} now.`
         headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
         body: JSON.stringify({
           entityType: 'ndis_note',
-          data: { userId: user.id, clientName, reportType, generatedNote: noteText, rawInput: rawNotes, workerName, duration, date, llm: USE_LOCAL_LLM ? OLLAMA_MODEL : 'claude-haiku' },
+          data: { userId: user.id, clientName, reportType, generatedNote: noteText, rawInput: rawNotes, workerName, duration, date, llm: llmUsed },
         }),
       }),
       fetch(`${ENGINE_URL}/api/orgs/${ORG_ID}/projects/${PROJECT_ID}/records`, {
@@ -178,7 +221,7 @@ Write the ${reportType || 'progress note'} now.`
       }),
     ]).catch(console.error)
 
-    return NextResponse.json({ note: noteText, llm: USE_LOCAL_LLM ? OLLAMA_MODEL : 'claude-haiku' })
+    return NextResponse.json({ note: noteText, llm: llmUsed })
   } catch (error) {
     console.error('AI generation error:', error)
     return NextResponse.json({ error: 'AI generation failed. Please try again.' }, { status: 500 })

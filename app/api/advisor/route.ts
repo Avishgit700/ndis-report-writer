@@ -1,6 +1,9 @@
-import { Ollama } from '@langchain/ollama'
 import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { NextRequest, NextResponse } from 'next/server'
+
+export const maxDuration = 120
+const USE_GEMINI = process.env.USE_GEMINI === 'true'
 
 const ENGINE_URL  = process.env.NEXT_PUBLIC_ENGINE_URL ?? 'https://saas-engine-production.up.railway.app'
 const ORG_ID      = process.env.SAAS_ENGINE_ORG_ID!
@@ -123,8 +126,40 @@ ${analysis.recentSample}
 WORKER'S QUESTION: ${question || 'Give me an overall quality review and top 3 things to improve.'}`
 
   if (USE_LOCAL) {
-    const llm = new Ollama({ model: OLLAMA_MODEL, baseUrl: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434', temperature: 0.4 })
-    return (await llm.invoke(`${systemPrompt}\n\n${dataContext}`)).trim()
+    const ollamaUrl = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+    const res = await fetch(`${ollamaUrl}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        prompt: `${systemPrompt}\n\n${dataContext}`,
+        stream: true,
+        options: { temperature: 0.4, num_predict: 600 },
+      }),
+    })
+    if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`)
+    const reader  = res.body!.getReader()
+    const decoder = new TextDecoder()
+    let output    = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      for (const line of chunk.split('\n')) {
+        if (!line.trim()) continue
+        try {
+          const json = JSON.parse(line) as { response?: string; done?: boolean }
+          if (json.response) output += json.response
+          if (json.done) break
+        } catch { /* skip */ }
+      }
+    }
+    return output.trim()
+  } else if (USE_GEMINI) {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const result = await model.generateContent(`${systemPrompt}\n\n${dataContext}`)
+    return result.response.text().trim()
   } else {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
     const msg = await anthropic.messages.create({

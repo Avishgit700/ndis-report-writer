@@ -68,6 +68,66 @@ body {
   box-shadow: 0 12px 40px rgba(16,185,129,0.12), 0 4px 16px rgba(0,0,0,0.08);
 }
 
+/* Animated gradient text — hero headline */
+@keyframes gradientShift {
+  0%,100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.gradient-text {
+  background: linear-gradient(135deg, #10b981, #0ea5e9, #8b5cf6, #10b981);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 5s ease infinite;
+}
+
+/* Floating 3D icon */
+@keyframes floatIcon {
+  0%,100% { transform: perspective(400px) rotateX(15deg) rotateY(-15deg) translateY(0px); }
+  50%      { transform: perspective(400px) rotateX(15deg) rotateY(-15deg) translateY(-12px); }
+}
+
+/* Logo ticker scroll */
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ticker-scroll {
+  animation: tickerScroll 28s linear infinite;
+  width: max-content;
+}
+.ticker-scroll:hover { animation-play-state: paused; }
+
+/* Glow pulse */
+@keyframes glowPulse {
+  0%,100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 0.7; transform: scale(1.05); }
+}
+.glow-pulse { animation: glowPulse 4s ease-in-out infinite; }
+
+/* Badge ping */
+@keyframes badgePing {
+  0%,100% { transform: scale(1); opacity:1; }
+  50%      { transform: scale(1.4); opacity:0.4; }
+}
+.badge-ping { animation: badgePing 2s ease-in-out infinite; }
+
+/* 3D card hover */
+.card-3d { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+.card-3d:hover {
+  transform: perspective(800px) rotateX(-2deg) rotateY(2deg) translateY(-6px);
+  box-shadow: 0 20px 60px rgba(16,185,129,0.12);
+}
+
+/* Glassmorphism */
+.glass {
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.8);
+}
+
 /* Gradient border card */
 .gradient-border {
   position: relative;

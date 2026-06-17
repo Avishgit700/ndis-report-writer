@@ -212,14 +212,18 @@ export default function DashboardPage() {
 
     try {
       const token = getToken()
+      const controller = new AbortController()
+      const fetchTimeout = setTimeout(() => controller.abort(), 115_000)
       const res = await fetch('/api/generate-note', {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ reportType, clientName, workerName, date, duration, clientGoals, mood, activities, incidents, rawNotes }),
       })
+      clearTimeout(fetchTimeout)
       const data = await res.json()
       if (!res.ok) {
         setError(res.status === 429
@@ -420,7 +424,8 @@ export default function DashboardPage() {
               <div className="text-center">
                 <div className="w-12 h-12 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                 <p className="text-sm font-medium text-gray-600">Writing your note…</p>
-                <p className="text-xs text-gray-400 mt-1">Usually under 5 seconds</p>
+                <p className="text-xs text-gray-400 mt-1">Local AI active — please wait up to 30 seconds</p>
+                <p className="text-xs text-emerald-500 mt-1">Your data stays on your machine ✓</p>
               </div>
             </div>
           )}

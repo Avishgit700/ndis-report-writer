@@ -1,0 +1,9 @@
+pytest
+pytest-asyncio
+requests
+torch
+pandas
+scikit-learn
+langchain
+langchain-ollama
+numpy
