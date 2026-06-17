@@ -61,6 +61,42 @@ const HOW_STEPS = [
   { n: '04', icon: Download,      title: 'Copy, export, done',     desc: 'Copy to clipboard, download as .txt, or print to PDF for your case management system.', color: 'bg-teal-500' },
 ]
 
+/* ─── Email capture ─────────────────────────────────────────── */
+function EmailCapture() {
+  const [email, setEmail] = useState('')
+  const [sent, setSent]   = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!email) return
+    setLoading(true)
+    await new Promise(r => setTimeout(r, 800))
+    setSent(true)
+    setLoading(false)
+  }
+
+  if (sent) return (
+    <div className="flex items-center justify-center gap-2 text-emerald-600 font-semibold py-3">
+      <Check className="w-5 h-5" /> Checklist sent! Check your inbox.
+    </div>
+  )
+
+  return (
+    <form onSubmit={submit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+      <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+        placeholder="your@email.com"
+        className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-emerald-500 transition-colors" />
+      <button type="submit" disabled={loading}
+        className="bg-emerald-600 text-white px-6 py-3 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-60 whitespace-nowrap flex items-center gap-2">
+        {loading
+          ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />Sending...</>
+          : <>Send checklist <ArrowRight className="w-4 h-4" /></>}
+      </button>
+    </form>
+  )
+}
+
 /* ─── Floating 3D icon ─────────────────────────────────────── */
 function Float3D({ icon: Icon, color, delay, x, y, size = 48 }: {
   icon: React.ElementType; color: string; delay: number; x: string; y: string; size?: number
@@ -504,6 +540,20 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Email capture / lead magnet ── */}
+      <section className="px-6 py-16 bg-white border-y border-gray-100">
+        <div className="max-w-2xl mx-auto text-center">
+          <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Free resource</p>
+          <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-3">
+            Get the free NDIS Documentation Checklist
+          </h2>
+          <p className="text-gray-500 text-sm mb-6">
+            11-point audit checklist used by NDIS Quality & Safeguards Commission — emailed to you instantly, free.
+          </p>
+          <EmailCapture />
+        </div>
+      </section>
+
       {/* ── Final CTA ── */}
       <section className="px-6 py-28 text-center relative overflow-hidden bg-gray-950">
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
@@ -561,6 +611,7 @@ export default function LandingPage() {
                 <div className="space-y-2">
                   <Link href="/privacy" className="block text-gray-500 text-sm hover:text-white transition-colors">Privacy</Link>
                   <Link href="/terms"   className="block text-gray-500 text-sm hover:text-white transition-colors">Terms</Link>
+                  <Link href="/admin"   className="block text-gray-600 text-xs hover:text-gray-400 transition-colors">Admin</Link>
                 </div>
               </div>
             </div>

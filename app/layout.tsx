@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import PromoBanner from './components/PromoBanner'
 
 const inter = Inter({
   variable: '--font-inter',
@@ -17,7 +18,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-[family-name:var(--font-inter)]">{children}</body>
+      <body className="min-h-full flex flex-col font-[family-name:var(--font-inter)]">
+        <PromoBanner />
+        {children}
+      </body>
     </html>
   )
 }
