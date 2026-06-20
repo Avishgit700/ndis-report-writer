@@ -177,25 +177,25 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white overflow-x-hidden">
 
       {/* ── Nav ── */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'glass shadow-sm' : 'bg-transparent'}`}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-100' : 'bg-transparent'}`}>
         <div className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
           <div className="flex items-center gap-2.5">
             <div className="relative">
               <div className="absolute inset-0 bg-emerald-500 rounded-xl blur-sm opacity-50" />
               <div className="relative w-9 h-9 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg">
-                <FileText className="w-4.5 h-4.5 text-white w-[18px] h-[18px]" />
+                <FileText className="w-[18px] h-[18px] text-white" />
               </div>
             </div>
-            <span className="text-xl font-black text-gray-900">NoteScribe <span className="text-emerald-600">AI</span></span>
+            <span className={`text-xl font-black transition-colors duration-300 ${scrolled ? 'text-gray-900' : 'text-white'}`}>NoteScribe <span className="text-emerald-400">AI</span></span>
           </div>
           <div className="hidden md:flex items-center gap-8">
-            <a href="#how-it-works" className="text-sm text-gray-500 hover:text-gray-900 transition-colors font-medium">How it works</a>
-            <a href="#features"     className="text-sm text-gray-500 hover:text-gray-900 transition-colors font-medium">Features</a>
-            <a href="#pricing"      className="text-sm text-gray-500 hover:text-gray-900 transition-colors font-medium">Pricing</a>
+            <a href="#how-it-works" className={`text-sm font-medium transition-colors duration-300 ${scrolled ? 'text-gray-500 hover:text-gray-900' : 'text-white/70 hover:text-white'}`}>How it works</a>
+            <a href="#features"     className={`text-sm font-medium transition-colors duration-300 ${scrolled ? 'text-gray-500 hover:text-gray-900' : 'text-white/70 hover:text-white'}`}>Features</a>
+            <a href="#pricing"      className={`text-sm font-medium transition-colors duration-300 ${scrolled ? 'text-gray-500 hover:text-gray-900' : 'text-white/70 hover:text-white'}`}>Pricing</a>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors hidden sm:block">Sign in</Link>
-            <Link href="/login" className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 hover:-translate-y-0.5">
+            <Link href="/login" className={`text-sm font-medium transition-colors duration-300 hidden sm:block ${scrolled ? 'text-gray-600 hover:text-gray-900' : 'text-white/80 hover:text-white'}`}>Sign in</Link>
+            <Link href="/login" className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-900/30 hover:-translate-y-0.5">
               Try free →
             </Link>
           </div>
