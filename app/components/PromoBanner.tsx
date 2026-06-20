@@ -11,9 +11,7 @@ export default function PromoBanner() {
     <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-2.5 px-4 text-center text-sm font-medium relative">
       <div className="flex items-center justify-center gap-2 flex-wrap">
         <Zap className="w-3.5 h-3.5 text-yellow-300 fill-yellow-300 flex-shrink-0" />
-        <span>🎉 Launch offer — <strong>50% off</strong> your first month. Use code</span>
-        <code className="bg-white/20 border border-white/30 px-2 py-0.5 rounded-md font-black tracking-wider text-yellow-200">NDIS50</code>
-        <span>at checkout.</span>
+        <span>🎉 Launch offer — <strong>50% off</strong> your first month.</span>
         <Link href="/login" className="underline font-bold hover:text-yellow-200 transition-colors">
           Claim offer →
         </Link>
